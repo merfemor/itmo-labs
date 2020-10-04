@@ -161,6 +161,9 @@ def exhaustive_search_two_arguments(f, a_from, a_to, b_from, b_to, precision):
     return [best_a, best_b]
 
 
+def arg_distance(a1, b1, a2, b2): return sqrt((a1 - a2) ** 2 + (b1 - b2) ** 2)
+
+
 def gauss_descent(f, a_from, a_to, b_from, b_to, precision):
     best_args = [(a_from + a_to) / 2, (b_from + b_to) / 2]
     best_res = f(best_args)
@@ -168,21 +171,27 @@ def gauss_descent(f, a_from, a_to, b_from, b_to, precision):
     iterations = 0
     f_calculations = 1
 
-    for a in np.arange(a_from + precision, a_to, precision):
-        cur_res = f([a, best_args[1]])
-        f_calculations += 1
-        if cur_res < best_res:
-            best_args[0] = a
-            best_res = cur_res
-        iterations += 1
+    while True:
+        prev_best_args = best_args[:]
 
-    for b in np.arange(b_from + precision, b_to, precision):
-        cur_res = f([best_args[0], b])
-        f_calculations += 1
-        if cur_res < best_res:
-            best_args[1] = b
-            best_res = cur_res
-        iterations += 1
+        for a in np.arange(a_from + precision, a_to, precision):
+            cur_res = f([a, best_args[1]])
+            f_calculations += 1
+            if cur_res < best_res:
+                best_args[0] = a
+                best_res = cur_res
+            iterations += 1
+
+        for b in np.arange(b_from + precision, b_to, precision):
+            cur_res = f([best_args[0], b])
+            f_calculations += 1
+            if cur_res < best_res:
+                best_args[1] = b
+                best_res = cur_res
+            iterations += 1
+
+        if arg_distance(prev_best_args[0], prev_best_args[1], best_args[0], best_args[1]) < precision:
+            break
 
     print("\t\tCurrent function value:", best_res)
     print("\t\tIterations:", iterations)
@@ -218,8 +227,6 @@ if __name__ == '__main__':
     def func_to_optimize_rational(args):
         return squared_deviations_sum(rational_approximation, xs, ys, args)
 
-    approx_xs = np.linspace(start=min(xs), stop=max(xs), num=len(xs))
-
     for func_to_optimize, plot_title, approx, a_from, a_to, b_from, b_to in [
         (func_to_optimize_linear, "Linear approximation",
          linear_approximation, -0.5, 1.0, -1.5, 1.5),
@@ -241,9 +248,9 @@ if __name__ == '__main__':
 
             def approx_func(x): return approx(x, res)
 
-            approx_ys = [approx_func(x) for x in approx_xs]
+            approx_ys = [approx_func(x) for x in xs]
 
-            plt.plot(approx_xs, approx_ys, color=color, label=name)
+            plt.plot(xs, approx_ys, color=color, label=name)
             print()
 
         plt.title(plot_title)
