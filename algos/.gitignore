@@ -4,7 +4,3 @@ lectures
 *.docx
 *.xls
 *.xlsx
-**/.idea
-**/__pycache__
-*.iml
-.DS_Store
