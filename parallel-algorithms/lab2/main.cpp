@@ -1,82 +1,34 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <omp.h>
 #include <assert.h>
-#include <stdbool.h>
-#include <time.h>
-#include <math.h>
+#include <stdio.h>
+#include "common.h"
 
-#define MATRIX_SIZE 700
-#define THREADS_NUM 9
-#define SQUARE_HEIGHT_WIDTH 3
-#define RANDOM_SEED 13
 #define DOUBLE_EQUALS_PRECISION 1e-6
-//#define PRINT_DEBUG_MATRICES
+#define PRINT_DEBUG_MATRICES
 
-double **allocateSquareMatrix(const unsigned int size) {
-    double **const matrix = (double **const) malloc(sizeof(double **) * size);
-    matrix[0] = (double *) malloc(sizeof(double) * size * size);
-    for (int i = 1; i < size; ++i) {
-        matrix[i] = matrix[0] + i * size;
-    }
-    return matrix;
-}
-
-double doubleRand(double from, double to) {
-    int r = rand();
-    double r01 = ((double) (r)) / RAND_MAX;
-    return (to - from) * r01 + from;
-}
-
-void fillSquareMatrixWithRandomNumbers(double **matrix, const unsigned int size) {
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            matrix[i][j] = doubleRand(-5., 5.);
-        }
-    }
-}
-
-double **multiplySquareMatricesSerial(double **const A, double **const B, const unsigned int size) {
-    double **const result = allocateSquareMatrix(MATRIX_SIZE);
-    for (unsigned int i = 0; i < size; ++i) {
-        for (unsigned int j = 0; j < size; ++j) {
-            double sum = 0;
-            for (unsigned int k = 0; k < size; ++k) {
-                sum += A[i][k] * B[k][j];
-            }
-            result[i][j] = sum;
-        }
-    }
-    return result;
-}
 
 double **multiplySquareMatricesParallelOmp(double **const A, double **const B, const unsigned int size) {
     volatile double **const result = (volatile double **const) allocateSquareMatrix(MATRIX_SIZE);
-    const int areaWidthHeight = size / 3;
+    assert(SQUARE_ROWS * SQUARE_COLS == WORKERS_NUM);
 
-#pragma omp parallel num_threads(THREADS_NUM)
+#pragma omp parallel num_threads(WORKERS_NUM)
     {
-        // determine range of indices for counting
         int threadNum = omp_get_thread_num();
-        assert(threadNum >= 0 && threadNum < THREADS_NUM);
-        int areaI = threadNum % SQUARE_HEIGHT_WIDTH;
-        int areaJ = threadNum / SQUARE_HEIGHT_WIDTH;
-        int iFrom = areaI * areaWidthHeight;
-        int iTo = iFrom + areaWidthHeight;
-        if (areaI == SQUARE_HEIGHT_WIDTH - 1) {
-            iTo = size;
-        }
+        assert(threadNum >= 0 && threadNum < WORKERS_NUM);
+        unsigned int rowFrom, rowTo, colFrom, colTo;
+        countRowColRangesFromWorkerNum(threadNum, WORKERS_NUM, SQUARE_ROWS, SQUARE_COLS, size,
+                                       &rowFrom, &rowTo, &colFrom, &colTo);
 
-        int jFrom = areaJ * areaWidthHeight;
-        int jTo = jFrom + areaWidthHeight;
-        if (areaJ == SQUARE_HEIGHT_WIDTH - 1) {
-            jTo = size;
-        }
+#ifdef PRINT_DEBUG_MATRICES
+        printf("For %d, ranges rows [%d, %d], cols [%d, %d]\n", threadNum, rowFrom, rowTo, colFrom, colTo);
+        fflush(stdout);
+#endif
 
-        for (int i = iFrom; i < iTo; ++i) {
-            for (int j = jFrom; j < jTo; ++j) {
+
+        for (unsigned int i = rowFrom; i < rowTo; ++i) {
+            for (unsigned int j = colFrom; j < colTo; ++j) {
                 double sum = 0;
-                for (int k = 0; k < size; ++k) {
+                for (unsigned int k = 0; k < size; ++k) {
                     sum += A[i][k] * B[k][j];
                 }
                 result[i][j] = sum;
@@ -84,26 +36,6 @@ double **multiplySquareMatricesParallelOmp(double **const A, double **const B, c
         }
     }
     return (double **) result;
-}
-
-bool areSquareMatricesEqual(double **A, double **B, const unsigned int size) {
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            if (fabs(A[i][j] - B[i][j]) > DOUBLE_EQUALS_PRECISION) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-void printMatrix(double **matrix, const unsigned int size) {
-    for (int i = 0; i < size; ++i) {
-        for (int j = 0; j < size; ++j) {
-            printf("%f ", matrix[i][j]);
-        }
-        puts("");
-    }
 }
 
 int main() {
@@ -143,7 +75,7 @@ int main() {
     printMatrix(resultOmp, MATRIX_SIZE);
 #endif
 
-    assert(areSquareMatricesEqual(resultSerial, resultOmp, MATRIX_SIZE));
+    assert(areSquareMatricesEqual(resultSerial, resultOmp, MATRIX_SIZE, DOUBLE_EQUALS_PRECISION));
     printf("Elapsed parallel with OpenMP %f s\n", elapsedTime);
 
     return 0;
