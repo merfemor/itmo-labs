@@ -3,17 +3,18 @@
 #include <stdbool.h>
 #include <math.h>
 
-#define MATRIX_SIZE 10
+#define MATRIX_SIZE 4
 #define RANDOM_SEED 13
-#define WORKERS_NUM 6
+#define WORKERS_NUM 4
 #define SQUARE_ROWS 2
-#define SQUARE_COLS 3
+#define SQUARE_COLS 2
 
-extern double **allocateSquareMatrix(const unsigned int size) {
-    double **const matrix = (double **const) malloc(sizeof(double **) * size);
-    matrix[0] = (double *) malloc(sizeof(double) * size * size);
-    for (unsigned int i = 1; i < size; ++i) {
-        matrix[i] = matrix[0] + i * size;
+
+extern double **allocateMatrix(const unsigned int n, const unsigned int m) {
+    double **const matrix = (double **const) malloc(sizeof(double **) * n);
+    matrix[0] = (double *) malloc(sizeof(double) * n * m);
+    for (unsigned int i = 1; i < n; ++i) {
+        matrix[i] = matrix[0] + i * m;
     }
     return matrix;
 }
@@ -32,9 +33,9 @@ extern void fillSquareMatrixWithRandomNumbers(double **matrix, const unsigned in
     }
 }
 
-extern void printMatrix(double **matrix, const unsigned int size) {
-    for (unsigned int i = 0; i < size; ++i) {
-        for (unsigned int j = 0; j < size; ++j) {
+extern void printMatrix(double **matrix, const unsigned int n, const unsigned int m) {
+    for (unsigned int i = 0; i < n; ++i) {
+        for (unsigned int j = 0; j < m; ++j) {
             printf("%f ", matrix[i][j]);
         }
         puts("");
@@ -54,7 +55,7 @@ extern bool areSquareMatricesEqual(double **A, double **B, const unsigned int si
 
 
 extern double **multiplySquareMatricesSerial(double **const A, double **const B, const unsigned int size) {
-    double **const result = allocateSquareMatrix(MATRIX_SIZE);
+    double **const result = allocateMatrix(MATRIX_SIZE, MATRIX_SIZE);
     for (unsigned int i = 0; i < size; ++i) {
         for (unsigned int j = 0; j < size; ++j) {
             double sum = 0;
@@ -68,13 +69,10 @@ extern double **multiplySquareMatricesSerial(double **const A, double **const B,
 }
 
 extern void countRowColRangesFromWorkerNum(
-        unsigned int myNum, unsigned int workersNum,
-        unsigned int rows, unsigned int cols, unsigned int size,
-        unsigned int *rowFrom, unsigned int *rowTo,
-        unsigned int *colFrom, unsigned int *colTo
+        unsigned int myNum, unsigned int rows, unsigned int cols, unsigned int size,
+        unsigned int *rowFrom, unsigned int *rowTo, unsigned int *colFrom,
+        unsigned int *colTo
 ) {
-    assert(myNum >= 0 && myNum < workersNum);
-
     unsigned int areaRows = size / rows;
     unsigned int areaCols = size / cols;
 
