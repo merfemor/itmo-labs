@@ -8,9 +8,6 @@
 #define NO_TAG 0
 #define DOUBLE_EQUALS_PRECISION 1e-6
 
-//#define PRINT_DEBUG_MATRICES
-
-
 void printLogPrefix(int rank) {
     printf("[%d] ", rank);
 }
@@ -36,12 +33,10 @@ int managerProcessSendMatrixParts(const int commSize, double **const matrix1, do
                                        &rowFrom, &rowTo, &colFrom, &colTo);
 
         // should send A[rFrom..rTo][..], B[..][colFrom..colTo]
-        for (unsigned int r = rowFrom; r < rowTo; ++r) {
-            err = MPI_Send(matrix1[r], MATRIX_SIZE, MPI_DOUBLE, procRank, NO_TAG, MPI_COMM_WORLD);
-            if (err) {
-                perror("Failed to send matrix 1 parts\n");
-                return err;
-            }
+        err = MPI_Send(matrix1[rowFrom], MATRIX_SIZE * (rowTo - rowFrom), MPI_DOUBLE, procRank, NO_TAG, MPI_COMM_WORLD);
+        if (err) {
+            perror("Failed to send matrix 1 parts\n");
+            return err;
         }
 
         for (unsigned int c = colFrom; c < colTo; ++c) {
@@ -64,7 +59,7 @@ int managerProcessReceiveMatrixParts(const unsigned int commSize, double ***pRes
     int err;
     MPI_Status status;
     double **result = allocateMatrix(MATRIX_SIZE, MATRIX_SIZE);
-    double *buf = (double *) malloc(sizeof(double) * MATRIX_SIZE);
+    double *buf = (double *) malloc(sizeof(double) * MATRIX_SIZE * MATRIX_SIZE);
 
     unsigned int remainedProcess = commSize - 1;
 
@@ -74,7 +69,7 @@ int managerProcessReceiveMatrixParts(const unsigned int commSize, double ***pRes
             perror("Failed to probe\n");
             return err;
         }
-        int procRank = status.MPI_SOURCE;
+        const int procRank = status.MPI_SOURCE;
 
         unsigned int rowFrom, rowTo, colFrom, colTo;
         unsigned int workerNum = procRank - 1; // do not count MANAGER_PROCESS_RANK
@@ -83,14 +78,14 @@ int managerProcessReceiveMatrixParts(const unsigned int commSize, double ***pRes
 
         unsigned int rows = rowTo - rowFrom, cols = colTo - colFrom;
 
+        err = MPI_Recv(buf, rows * cols, MPI_DOUBLE, procRank, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        if (err) {
+            perror("Failed to receive result part\n");
+            return err;
+        }
         for (int r = 0; r < rows; ++r) {
-            err = MPI_Recv(buf, cols, MPI_DOUBLE, procRank, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-            if (err) {
-                perror("Failed to receive result part\n");
-                return err;
-            }
             for (int c = 0; c < cols; ++c) {
-                result[rowFrom + r][colFrom + c] = buf[c];
+                result[rowFrom + r][colFrom + c] = buf[rows * r + c];
             }
         }
         printLogPrefix(MANAGER_PROCESS_RANK);
@@ -167,13 +162,11 @@ int workerProcessReceiveMatrices(const int rank, double ***pMatrix1Part, const u
     MPI_Status status;
 
     double **matrix1Part = allocateMatrix(matrix1Rows, MATRIX_SIZE);
-    for (int r = 0; r < matrix1Rows; ++r) {
-        err = MPI_Recv(matrix1Part[r], MATRIX_SIZE, MPI_DOUBLE, MANAGER_PROCESS_RANK, MPI_ANY_TAG, MPI_COMM_WORLD,
-                       &status);
-        if (err) {
-            perror("Failed to receive\n");
-            return err;
-        }
+    err = MPI_Recv(*matrix1Part, MATRIX_SIZE * matrix1Rows, MPI_DOUBLE, MANAGER_PROCESS_RANK, MPI_ANY_TAG, MPI_COMM_WORLD,
+                   &status);
+    if (err) {
+        perror("Failed to receive\n");
+        return err;
     }
 
     double **matrix2Part = allocateMatrix(MATRIX_SIZE, matrix2Cols);
@@ -199,12 +192,10 @@ int workerProcessReceiveMatrices(const int rank, double ***pMatrix1Part, const u
 
 int workerProcessSendResultPart(double **const resultPart, const unsigned int rows, const unsigned int cols) {
     int err;
-    for (int i = 0; i < rows; ++i) {
-        err = MPI_Send(resultPart[i], cols, MPI_DOUBLE, MANAGER_PROCESS_RANK, NO_TAG, MPI_COMM_WORLD);
-        if (err) {
-            perror("Failed to send result part\n");
-            return err;
-        }
+    err = MPI_Send(resultPart[0], rows * cols, MPI_DOUBLE, MANAGER_PROCESS_RANK, NO_TAG, MPI_COMM_WORLD);
+    if (err) {
+        perror("Failed to send result part\n");
+        return err;
     }
     return 0;
 }
