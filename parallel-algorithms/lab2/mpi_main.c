@@ -215,13 +215,6 @@ int workerProcessMain(int rank) {
     matrix1Part = NULL;
     matrix2Part = NULL;
 
-#ifdef PRINT_DEBUG_MATRICES
-    printLogPrefix(rank);
-    puts("Result part");
-    printMatrix(resultPart, matrix1Rows, matrix2Cols);
-    puts("");
-#endif
-
     err = workerProcessSendResultPart(resultPart, matrix1Rows, matrix2Cols);
     return err;
 }
@@ -244,6 +237,7 @@ int main(int argc, char *argv[]) {
 
     printLogPrefix(rank);
     puts("Started");
+    double startTime = MPI_Wtime();
 
     int res;
     if (rank == MANAGER_PROCESS_RANK) {
@@ -251,6 +245,9 @@ int main(int argc, char *argv[]) {
     } else {
         res = workerProcessMain(rank);
     }
+    double elapsedTime = MPI_Wtime() - startTime;
+    printLogPrefix(rank);
+    printf("Elapsed %f s\n", elapsedTime);
     MPI_Finalize();
     return res;
 }
