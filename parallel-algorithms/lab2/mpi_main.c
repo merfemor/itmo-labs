@@ -66,7 +66,16 @@ int managerProcessReceiveMatrixParts(const unsigned int commSize, double ***pRes
     double **result = allocateMatrix(MATRIX_SIZE, MATRIX_SIZE);
     double *buf = (double *) malloc(sizeof(double) * MATRIX_SIZE);
 
-    for (int procRank = 1; procRank < commSize; ++procRank) {
+    unsigned int remainedProcess = commSize - 1;
+
+    while (remainedProcess > 0) {
+        err = MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+        if (err) {
+            perror("Failed to probe\n");
+            return err;
+        }
+        int procRank = status.MPI_SOURCE;
+
         unsigned int rowFrom, rowTo, colFrom, colTo;
         unsigned int workerNum = procRank - 1; // do not count MANAGER_PROCESS_RANK
         countRowColRangesFromWorkerNum(workerNum, SQUARE_ROWS, SQUARE_COLS, MATRIX_SIZE,
@@ -84,6 +93,10 @@ int managerProcessReceiveMatrixParts(const unsigned int commSize, double ***pRes
                 result[rowFrom + r][colFrom + c] = buf[c];
             }
         }
+        printLogPrefix(MANAGER_PROCESS_RANK);
+        printf("Received part from %d\n", procRank);
+
+        remainedProcess--;
     }
     free(buf);
     buf = NULL;
