@@ -12,6 +12,6 @@ include_directories(/usr/local/Cellar/open-mpi/4.0.5/include)
 
 set(CMAKE_C_COMPILER mpicc)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DPRINT_DEBUG_MATRICES")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DPRINT_DEBUG_MATRICES -DSERIAL_RESULT_CHECK")
 
 add_executable(lab2_mpi mpi_main.c)

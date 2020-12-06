@@ -3,12 +3,11 @@
 #include <stdbool.h>
 #include <math.h>
 
-#define MATRIX_SIZE 1000
+#define MATRIX_SIZE 2000
 #define RANDOM_SEED 13
 #define WORKERS_NUM 4
 #define SQUARE_ROWS 2
 #define SQUARE_COLS 2
-
 
 extern double **allocateMatrix(const unsigned int n, const unsigned int m) {
     double **const matrix = (double **const) malloc(sizeof(double **) * n);

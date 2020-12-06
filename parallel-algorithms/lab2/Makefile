@@ -2,7 +2,7 @@ all: mpi omp
 
 mpi:
 	mkdir -p out
-	mpicc -o out/lab2_mpi -g -Wall -DPRINT_DEBUG_MATRICES mpi_main.c
+	mpicc -o out/lab2_mpi -g -Wall -DPRINT_DEBUG_MATRICES -DSERIAL_RESULT_CHECK mpi_main.c
 
 omp:
 	mkdir -p out
@@ -10,7 +10,7 @@ omp:
 
 mpi_release:
 	mkdir -p out
-	mpicc -o out/lab2_mpi -Wall -O3 mpi_main.c
+	mpicc -o out/lab2_mpi -Wall -O3 -DSERIAL_RESULT_CHECK mpi_main.c
 
 omp_release:
 	mkdir -p out

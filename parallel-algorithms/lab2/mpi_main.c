@@ -7,7 +7,7 @@
 #define MANAGER_PROCESS_RANK 0
 #define NO_TAG 0
 #define DOUBLE_EQUALS_PRECISION 1e-6
-#define USE_DERIVED_DTYPES
+//#define USE_DERIVED_DTYPES
 
 struct Config {
     bool useDerivedDtypes;
@@ -158,12 +158,24 @@ int managerProcessReceiveMatrixParts(const unsigned int commSize, double ***pRes
 }
 
 int managerProcessMain(int commSize) {
+    double prevTime = MPI_Wtime();
+
     int err;
     srand(RANDOM_SEED);
     double **matrix1, **matrix2;
     managerProcessCreateMatrices(&matrix1, &matrix2);
 
+    double createMatricesTime = MPI_Wtime();
+    printf("Spent in create matrices %f s\n", createMatricesTime - prevTime);
+    prevTime = createMatricesTime;
+
+#ifdef SERIAL_RESULT_CHECK
     double **expectedResult = multiplySquareMatricesSerial(matrix1, matrix2, MATRIX_SIZE);
+    double serialResultTime = MPI_Wtime();
+    printf("Spent in serial result count %f s\n", serialResultTime - prevTime);
+    double serialResultTimeMem = serialResultTime - prevTime;
+    prevTime = serialResultTime;
+#endif
 
 #ifdef PRINT_DEBUG_MATRICES
     puts("Matrix 1");
@@ -186,11 +198,26 @@ int managerProcessMain(int commSize) {
     matrix1 = NULL;
     matrix2 = NULL;
 
+    double sendMatrixTime = MPI_Wtime();
+    printf("Spent in send matrices %f s\n", sendMatrixTime - prevTime);
+    double sendMatrixTimeMem = sendMatrixTime - prevTime;
+    prevTime = sendMatrixTime;
+
     double **result;
     err = managerProcessReceiveMatrixParts(commSize, &result);
     if (err) {
         return err;
     }
+
+    double countingTime = MPI_Wtime();
+    printf("Spent in counting %f s\n", countingTime - prevTime);
+    double countingTimeMem = countingTime - prevTime;
+    prevTime = countingTime;
+
+#ifdef SERIAL_RESULT_CHECK
+    double speedup = serialResultTimeMem / (countingTimeMem + sendMatrixTimeMem);
+    printf("Seedup is %f\n", speedup);
+#endif
 
 #ifdef PRINT_DEBUG_MATRICES
     puts("Result");
@@ -198,7 +225,9 @@ int managerProcessMain(int commSize) {
     puts("");
 #endif
 
+#ifdef SERIAL_RESULT_CHECK
     assert(areMatricesEqual(expectedResult, result, MATRIX_SIZE, MATRIX_SIZE, DOUBLE_EQUALS_PRECISION));
+#endif
     return 0;
 }
 
@@ -350,7 +379,6 @@ int main(int argc, char *argv[]) {
 
     printLogPrefix(rank);
     puts("Started");
-    double startTime = MPI_Wtime();
 
     err = initStatic();
     if (err) {
@@ -367,9 +395,8 @@ int main(int argc, char *argv[]) {
         MPI_Finalize();
         return err;
     }
-    double elapsedTime = MPI_Wtime() - startTime;
     printLogPrefix(rank);
-    printf("Elapsed %f s\n", elapsedTime);
+    puts("Successfully finished");
 
     MPI_Finalize();
     return 0;
