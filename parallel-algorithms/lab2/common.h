@@ -42,9 +42,12 @@ extern void printMatrix(double **matrix, const unsigned int n, const unsigned in
     }
 }
 
-extern bool areSquareMatricesEqual(double **A, double **B, const unsigned int size, double precision) {
-    for (unsigned int i = 0; i < size; ++i) {
-        for (unsigned int j = 0; j < size; ++j) {
+extern bool areMatricesEqual(
+        double **A, double **B,
+        const unsigned int rows, const unsigned int cols, double precision
+) {
+    for (unsigned int i = 0; i < rows; ++i) {
+        for (unsigned int j = 0; j < cols; ++j) {
             if (fabs(A[i][j] - B[i][j]) > precision) {
                 return false;
             }
@@ -53,19 +56,31 @@ extern bool areSquareMatricesEqual(double **A, double **B, const unsigned int si
     return true;
 }
 
+extern double **multiplyMatricesSerial(
+        double **const A, const unsigned int rowsA, const unsigned int colsA,
+        double **const B, const unsigned int rowsB, const unsigned int colsB
+) {
+    if (colsA != rowsB) {
+        assert(false);
+        return NULL;
+    }
 
-extern double **multiplySquareMatricesSerial(double **const A, double **const B, const unsigned int size) {
-    double **const result = allocateMatrix(MATRIX_SIZE, MATRIX_SIZE);
-    for (unsigned int i = 0; i < size; ++i) {
-        for (unsigned int j = 0; j < size; ++j) {
+    double **const result = allocateMatrix(rowsA, colsB);
+    for (unsigned int i = 0; i < rowsA; ++i) {
+        for (unsigned int j = 0; j < colsB; ++j) {
             double sum = 0;
-            for (unsigned int k = 0; k < size; ++k) {
+            for (unsigned int k = 0; k < colsA; ++k) {
                 sum += A[i][k] * B[k][j];
             }
             result[i][j] = sum;
         }
     }
     return result;
+}
+
+
+extern double **multiplySquareMatricesSerial(double **const A, double **const B, const unsigned int size) {
+    return multiplyMatricesSerial(A, size, size, B, size, size);
 }
 
 extern void countRowColRangesFromWorkerNum(
