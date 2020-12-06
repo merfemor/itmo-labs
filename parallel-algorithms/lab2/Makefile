@@ -1,11 +1,18 @@
+all: mpi1 omp
+
 mpi1:
-	mpic++ -o lab2_mpi -Wall mpi_main.cpp
+	mkdir -p out
+	mpicc -o out/lab2_mpi -Wall mpi_main.c
 
 omp:
-	g++-10 -o lab2_omp -Wall -fopenmp main.cpp
-
+	mkdir -p out
+	gcc-10 -o out/lab2_omp -Wall -fopenmp main.c
 
 clean:
-	rm -f lab2_mpi lab2_omp
+	rm -rf out
 
-all: mpi1 omp
+mpi1_run: mpi1
+	mpirun -np 5 ./out/lab2_mpi
+
+omp_run:
+	./out/lab2_mpi

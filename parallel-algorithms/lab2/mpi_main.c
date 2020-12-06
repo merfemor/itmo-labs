@@ -6,6 +6,7 @@
 
 #define MANAGER_PROCESS_RANK 0
 #define NO_TAG 0
+#define DOUBLE_EQUALS_PRECISION 1e-6
 
 #define PRINT_DEBUG_MATRICES
 
@@ -30,7 +31,7 @@ int managerProcessSendMatrixParts(const int commSize, double **const matrix1, do
     double *buf = (double *) malloc(sizeof(double) * MATRIX_SIZE);
     for (int procRank = 1; procRank < commSize; ++procRank) {
         unsigned int rowFrom, rowTo, colFrom, colTo;
-        int workerNum = procRank - 1; // do not count MANAGER_PROCESS_RANK
+        unsigned int workerNum = procRank - 1; // do not count MANAGER_PROCESS_RANK
         countRowColRangesFromWorkerNum(workerNum, SQUARE_ROWS, SQUARE_COLS, MATRIX_SIZE,
                                        &rowFrom, &rowTo, &colFrom, &colTo);
 
@@ -38,7 +39,7 @@ int managerProcessSendMatrixParts(const int commSize, double **const matrix1, do
         for (unsigned int r = rowFrom; r < rowTo; ++r) {
             err = MPI_Send(matrix1[r], MATRIX_SIZE, MPI_DOUBLE, procRank, NO_TAG, MPI_COMM_WORLD);
             if (err) {
-                perror("Failed to send\n");
+                perror("Failed to send matrix 1 parts\n");
                 return err;
             }
         }
@@ -49,13 +50,44 @@ int managerProcessSendMatrixParts(const int commSize, double **const matrix1, do
             }
             err = MPI_Send(buf, MATRIX_SIZE, MPI_DOUBLE, procRank, NO_TAG, MPI_COMM_WORLD);
             if (err) {
-                perror("Failed to send\n");
+                perror("Failed to send matrix 2 parts\n");
                 return err;
             }
         }
     }
     free(buf);
     buf = NULL;
+    return 0;
+}
+
+int managerProcessReceiveMatrixParts(const unsigned int commSize, double ***pResult) {
+    int err;
+    MPI_Status status;
+    double **result = allocateMatrix(MATRIX_SIZE, MATRIX_SIZE);
+    double *buf = (double *) malloc(sizeof(double) * MATRIX_SIZE);
+
+    for (int procRank = 1; procRank < commSize; ++procRank) {
+        unsigned int rowFrom, rowTo, colFrom, colTo;
+        unsigned int workerNum = procRank - 1; // do not count MANAGER_PROCESS_RANK
+        countRowColRangesFromWorkerNum(workerNum, SQUARE_ROWS, SQUARE_COLS, MATRIX_SIZE,
+                                       &rowFrom, &rowTo, &colFrom, &colTo);
+
+        unsigned int rows = rowTo - rowFrom, cols = colTo - colFrom;
+
+        for (int r = 0; r < rows; ++r) {
+            err = MPI_Recv(buf, cols, MPI_DOUBLE, procRank, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            if (err) {
+                perror("Failed to receive result part\n");
+                return err;
+            }
+            for (int c = 0; c < cols; ++c) {
+                result[rowFrom + r][colFrom + c] = buf[c];
+            }
+        }
+    }
+    free(buf);
+    buf = NULL;
+    *pResult = result;
     return 0;
 }
 
@@ -83,6 +115,24 @@ int managerProcessMain(int commSize) {
     if (err) {
         return err;
     }
+    free(matrix1);
+    free(matrix2);
+    matrix1 = NULL;
+    matrix2 = NULL;
+
+    double **result;
+    err = managerProcessReceiveMatrixParts(commSize, &result);
+    if (err) {
+        return err;
+    }
+
+#ifdef PRINT_DEBUG_MATRICES
+    puts("Result");
+    printMatrix(result, MATRIX_SIZE, MATRIX_SIZE);
+    puts("");
+#endif
+
+    assert(areMatricesEqual(expectedResult, result, MATRIX_SIZE, MATRIX_SIZE, DOUBLE_EQUALS_PRECISION));
     return 0;
 }
 
@@ -112,12 +162,6 @@ int workerProcessReceiveMatrices(const int rank, double ***pMatrix1Part, const u
             return err;
         }
     }
-#ifdef PRINT_DEBUG_MATRICES
-    printLogPrefix(rank);
-    puts("Matrix 1 part");
-    printMatrix(matrix1Part, matrix1Rows, MATRIX_SIZE);
-    puts("");
-#endif
 
     double **matrix2Part = allocateMatrix(MATRIX_SIZE, matrix2Cols);
     double *buf = (double *) malloc(sizeof(double) * MATRIX_SIZE);
@@ -134,15 +178,21 @@ int workerProcessReceiveMatrices(const int rank, double ***pMatrix1Part, const u
     free(buf);
     buf = NULL;
 
-#ifdef PRINT_DEBUG_MATRICES
-    printLogPrefix(rank);
-    puts("Matrix 2 part");
-    printMatrix(matrix2Part, MATRIX_SIZE, matrix2Cols);
-    puts("");
-#endif
-
     *pMatrix1Part = matrix1Part;
     *pMatrix2Part = matrix2Part;
+    return 0;
+}
+
+
+int workerProcessSendResultPart(double **const resultPart, const unsigned int rows, const unsigned int cols) {
+    int err;
+    for (int i = 0; i < rows; ++i) {
+        err = MPI_Send(resultPart[i], cols, MPI_DOUBLE, MANAGER_PROCESS_RANK, NO_TAG, MPI_COMM_WORLD);
+        if (err) {
+            perror("Failed to send result part\n");
+            return err;
+        }
+    }
     return 0;
 }
 
@@ -160,6 +210,11 @@ int workerProcessMain(int rank) {
 
     double **resultPart = multiplyMatricesSerial(matrix1Part, matrix1Rows, MATRIX_SIZE,
                                                  matrix2Part, MATRIX_SIZE, matrix2Cols);
+    free(matrix1Part);
+    free(matrix2Part);
+    matrix1Part = NULL;
+    matrix2Part = NULL;
+
 #ifdef PRINT_DEBUG_MATRICES
     printLogPrefix(rank);
     puts("Result part");
@@ -167,7 +222,8 @@ int workerProcessMain(int rank) {
     puts("");
 #endif
 
-    return 0;
+    err = workerProcessSendResultPart(resultPart, matrix1Rows, matrix2Cols);
+    return err;
 }
 
 int main(int argc, char *argv[]) {
