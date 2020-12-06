@@ -8,7 +8,7 @@
 #define NO_TAG 0
 #define DOUBLE_EQUALS_PRECISION 1e-6
 
-#define PRINT_DEBUG_MATRICES
+//#define PRINT_DEBUG_MATRICES
 
 
 void printLogPrefix(int rank) {

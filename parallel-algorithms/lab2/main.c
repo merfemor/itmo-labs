@@ -4,7 +4,7 @@
 #include "common.h"
 
 #define DOUBLE_EQUALS_PRECISION 1e-6
-#define PRINT_DEBUG_MATRICES
+//#define PRINT_DEBUG_MATRICES
 
 
 double **multiplySquareMatricesParallelOmp(double **const A, double **const B, const unsigned int size) {

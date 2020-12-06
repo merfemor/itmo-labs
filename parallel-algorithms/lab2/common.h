@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <math.h>
 
-#define MATRIX_SIZE 4
+#define MATRIX_SIZE 1000
 #define RANDOM_SEED 13
 #define WORKERS_NUM 4
 #define SQUARE_ROWS 2
