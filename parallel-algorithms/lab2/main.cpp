@@ -8,7 +8,7 @@
 
 
 double **multiplySquareMatricesParallelOmp(double **const A, double **const B, const unsigned int size) {
-    volatile double **const result = (volatile double **const) allocateSquareMatrix(MATRIX_SIZE);
+    volatile double **const result = (volatile double **const) allocateMatrix(size, size);
     assert(SQUARE_ROWS * SQUARE_COLS == WORKERS_NUM);
 
 #pragma omp parallel num_threads(WORKERS_NUM)
@@ -16,7 +16,7 @@ double **multiplySquareMatricesParallelOmp(double **const A, double **const B, c
         int threadNum = omp_get_thread_num();
         assert(threadNum >= 0 && threadNum < WORKERS_NUM);
         unsigned int rowFrom, rowTo, colFrom, colTo;
-        countRowColRangesFromWorkerNum(threadNum, WORKERS_NUM, SQUARE_ROWS, SQUARE_COLS, size,
+        countRowColRangesFromWorkerNum(threadNum, SQUARE_ROWS, SQUARE_COLS, size,
                                        &rowFrom, &rowTo, &colFrom, &colTo);
 
 #ifdef PRINT_DEBUG_MATRICES
@@ -41,18 +41,18 @@ double **multiplySquareMatricesParallelOmp(double **const A, double **const B, c
 int main() {
     srand(RANDOM_SEED);
 
-    double **const matrix1 = allocateSquareMatrix(MATRIX_SIZE);
+    double **const matrix1 = allocateMatrix(MATRIX_SIZE, MATRIX_SIZE);
     fillSquareMatrixWithRandomNumbers(matrix1, MATRIX_SIZE);
-    double **const matrix2 = allocateSquareMatrix(MATRIX_SIZE);
+    double **const matrix2 = allocateMatrix(MATRIX_SIZE, MATRIX_SIZE);
     fillSquareMatrixWithRandomNumbers(matrix2, MATRIX_SIZE);
     double start, elapsedTime;
 
 #ifdef PRINT_DEBUG_MATRICES
     puts("Matrix1");
-    printMatrix(matrix1, MATRIX_SIZE);
+    printMatrix(matrix1, MATRIX_SIZE, MATRIX_SIZE);
 
     puts("\nMatrix2");
-    printMatrix(matrix2, MATRIX_SIZE);
+    printMatrix(matrix2, MATRIX_SIZE, MATRIX_SIZE);
 #endif
 
     start = omp_get_wtime();
@@ -61,7 +61,7 @@ int main() {
 
 #ifdef PRINT_DEBUG_MATRICES
     puts("\nResult serial");
-    printMatrix(resultSerial, MATRIX_SIZE);
+    printMatrix(resultSerial, MATRIX_SIZE, MATRIX_SIZE);
 #endif
 
     printf("Elapsed serial %f s\n", elapsedTime);
@@ -72,10 +72,10 @@ int main() {
 
 #ifdef PRINT_DEBUG_MATRICES
     puts("\nResult omp");
-    printMatrix(resultOmp, MATRIX_SIZE);
+    printMatrix(resultOmp, MATRIX_SIZE, MATRIX_SIZE);
 #endif
 
-    assert(areSquareMatricesEqual(resultSerial, resultOmp, MATRIX_SIZE, DOUBLE_EQUALS_PRECISION));
+    assert(areMatricesEqual(resultSerial, resultOmp, MATRIX_SIZE, MATRIX_SIZE, DOUBLE_EQUALS_PRECISION));
     printf("Elapsed parallel with OpenMP %f s\n", elapsedTime);
 
     return 0;
