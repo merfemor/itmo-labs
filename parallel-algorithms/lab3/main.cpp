@@ -7,7 +7,7 @@
 #include <omp.h>
 
 #define CLUSTERS_NUM 5
-#define DATASET_FILE_PATH "/Users/merfemor/Downloads/birch3_frist10.txt"
+#define DATASET_FILE_PATH "/Users/merfemor/Downloads/birch3.txt"
 #define MAX_ITERATIONS 1000000
 #define RANDOM_SEED 13
 
@@ -15,8 +15,8 @@ using namespace std;
 
 
 struct Point {
-    double x;
-    double y;
+    const long x;
+    const long y;
     unsigned int cluster;
 };
 
@@ -35,9 +35,7 @@ vector<Point> *readDataSetFromFile(const char *filePath) {
 
     long x, y;
     while (fscanf(file, "%ld %ld", &x, &y) != EOF) {
-        Point p{};
-        p.x = x;
-        p.y = y;
+        Point p{.x = x, .y = y, 0};
         vec->push_back(p);
     }
     fclose(file);
@@ -53,24 +51,52 @@ void randomilyAssignClusters(vector<Point> *pPoints) {
 }
 
 void countCentroids(vector<Centroid> *pCentroids, vector<Point> *pPoints) {
-    vector<double> *avgX = new vector<double>(CLUSTERS_NUM, 0);
-    vector<double> *avgY = new vector<double>(CLUSTERS_NUM, 0);
-    for (Point p : *pPoints) {
+    vector<long> *avgX = new vector<long>(CLUSTERS_NUM, 0);
+    vector<long> *avgY = new vector<long>(CLUSTERS_NUM, 0);
+    vector<unsigned long> *pointsNum = new vector<unsigned long>(CLUSTERS_NUM, 0);
+    for (Point &p : *pPoints) {
         (*avgX)[p.cluster] += p.x;
         (*avgY)[p.cluster] += p.y;
+        (*pointsNum)[p.cluster]++;
     }
     for (int i = 0; i < CLUSTERS_NUM; ++i) {
-        (*pCentroids)[i].x = (*avgX)[i] / CLUSTERS_NUM;
-        (*pCentroids)[i].y = (*avgY)[i] / CLUSTERS_NUM;
+        (*pCentroids)[i].x = ((double) (*avgX)[i]) / (*pointsNum)[i];
+        (*pCentroids)[i].y = ((double) (*avgY)[i]) / (*pointsNum)[i];
     }
     delete avgX;
     delete avgY;
+    delete pointsNum;
+}
+
+void countCentroidsParallel(vector<Centroid> *pCentroids, vector<Point> *pPoints, int threadsNum) {
+    assert(threadsNum > 1);
+
+    // TODO: consider parallelize this loop too?
+    for (unsigned int i = 0; i < CLUSTERS_NUM; ++i) {
+        Centroid &c = (*pCentroids)[i];
+
+        long sumX = 0;
+        long sumY = 0;
+        unsigned long points = 0;
+#pragma omp parallel for num_threads(threadsNum) reduction(+:sumX, sumY, points) if (threadsNum > 1)
+        for (unsigned int j = 0; j < pPoints->size(); j++) {
+            const Point &p = (*pPoints)[j];
+            if (p.cluster != i) {
+                continue;
+            }
+            sumX += p.x;
+            sumY += p.y;
+            points++;
+        }
+        c.x = ((double) sumX) / points;
+        c.y = ((double) sumY) / points;
+    }
 }
 
 void printClusters(vector<Point> *pPoints) {
     puts("Clusters dump:");
     for (unsigned int i = 0; i < pPoints->size(); ++i) {
-        printf("%d: %f %f cluster %d\n", i, (*pPoints)[i].x, (*pPoints)[i].y, (*pPoints)[i].cluster);
+        printf("%d: %ld %ld cluster %d\n", i, (*pPoints)[i].x, (*pPoints)[i].y, (*pPoints)[i].cluster);
     }
     puts("");
 }
@@ -87,10 +113,13 @@ double distanceEuclideanSquared(double x1, double y1, double x2, double y2) {
     return pow(x2 - x1, 2) + pow(y2 - y1, 2);
 }
 
-unsigned int reassignClusters(vector<Point> *pPoints, vector<Centroid> *pCentroids) {
+unsigned int reassignClusters(vector<Point> *pPoints, vector<Centroid> *pCentroids, unsigned int threadsNum) {
+    assert(threadsNum > 0);
     unsigned int changes = 0;
-    for (Point &p : *pPoints) {
-        Centroid &currentCentroid = (*pCentroids)[p.cluster];
+#pragma omp parallel for num_threads(threadsNum) if (threadsNum > 1)
+    for (unsigned int i = 0; i < pPoints->size(); i++) {
+        Point &p = (*pPoints)[i];
+        const Centroid &currentCentroid = (*pCentroids)[p.cluster];
         double bestDistance = distanceEuclideanSquared(p.x, p.y, currentCentroid.x, currentCentroid.y);
         unsigned int bestClusterNum = p.cluster;
         for (unsigned int i = 0; i < pCentroids->size(); ++i) {
@@ -117,13 +146,41 @@ unsigned int kmeansSerial(vector<Point> *pPoints) {
     unsigned int iterations = 0;
     for (; iterations < MAX_ITERATIONS; iterations++) {
         countCentroids(pCentroids, pPoints);
-        int changes = reassignClusters(pPoints, pCentroids);
+        int changes = reassignClusters(pPoints, pCentroids, 1);
         if (changes == 0) {
             break;
         }
     }
     delete pCentroids;
     return iterations;
+}
+
+unsigned int kmeansParallel(vector<Point> *pPoints, unsigned int threadsNum) {
+    vector<Centroid> *pCentroids = new vector<Centroid>(CLUSTERS_NUM, Centroid{});
+    unsigned int iterations = 0;
+    for (; iterations < MAX_ITERATIONS; iterations++) {
+        countCentroidsParallel(pCentroids, pPoints, threadsNum);
+        int changes = reassignClusters(pPoints, pCentroids, threadsNum);
+        if (changes == 0) {
+            break;
+        }
+    }
+    delete pCentroids;
+    return iterations;
+}
+
+bool areEqual(vector<Point> *expected, vector<Point> *actual) {
+    if (expected->size() != actual->size()) {
+        return false;
+    }
+    for (unsigned int i = 0; i < expected->size(); ++i) {
+        Point &pe = (*expected)[i];
+        Point &pa = (*actual)[i];
+        if (pe.cluster != pa.cluster) {
+            return false;
+        }
+    }
+    return true;
 }
 
 int main() {
@@ -133,16 +190,31 @@ int main() {
     srand(RANDOM_SEED);
     randomilyAssignClusters(originalDataSet);
 
-    vector<Point> *dataSet = new vector<Point>(*originalDataSet);
+//    puts("Initial clusters:");
+//    printClusters(originalDataSet);
 
-    puts("Initial clusters:");
-    printClusters(dataSet);
+    puts("Threads,Time (ms),Speedup,Iterations");
+    vector<Point> *pSerialResult = new vector<Point>(*originalDataSet);
+    double startSerial = omp_get_wtime();
+    unsigned int iterations = kmeansSerial(pSerialResult);
+    double serialTime = omp_get_wtime() - startSerial;
 
-    double start = omp_get_wtime();
-    unsigned int iterations = kmeansSerial(dataSet);
-    double end = omp_get_wtime();
+//    printClusters(dataSet);
+    printf("1,%f,-,%d\n", serialTime * 1000, iterations);
 
-    printf("Result achieved, %f ms, %d iterations:\n", (end - start) * 1000, iterations);
-    printClusters(dataSet);
+    int maxThreads = omp_get_max_threads();
+    for (int threadsNum = 2; threadsNum <= maxThreads; ++threadsNum) {
+        vector<Point> *dataSet = new vector<Point>(*originalDataSet);
+        double start = omp_get_wtime();
+        unsigned int iterations = kmeansParallel(dataSet, threadsNum);
+        double end = omp_get_wtime();
+        double speedup = serialTime / (end - start);
+        printf("%d,%f,%f,%d\n", threadsNum, (end - start) * 1000, speedup, iterations);
+
+//        puts("Result:");
+//        printClusters(dataSet);
+        assert(areEqual(pSerialResult, dataSet));
+        delete dataSet;
+    }
     return 0;
 }
