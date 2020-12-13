@@ -127,11 +127,13 @@ unsigned int kmeansSerial(vector<Point> *pPoints) {
 }
 
 int main() {
-    vector<Point> *dataSet = readDataSetFromFile(DATASET_FILE_PATH);
-    unsigned long size = dataSet->size();
+    vector<Point> *originalDataSet = readDataSetFromFile(DATASET_FILE_PATH);
+    unsigned long size = originalDataSet->size();
     printf("Size of dataset is %ld\n", size);
     srand(RANDOM_SEED);
-    randomilyAssignClusters(dataSet);
+    randomilyAssignClusters(originalDataSet);
+
+    vector<Point> *dataSet = new vector<Point>(*originalDataSet);
 
     puts("Initial clusters:");
     printClusters(dataSet);
